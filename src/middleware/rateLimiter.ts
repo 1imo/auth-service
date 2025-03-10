@@ -29,4 +29,14 @@ export const keyRotationLimiter = rateLimit({
     keyGenerator: (req: Request) => req.get('X-Service-Name') ?? req.ip ?? 'unknown',
     standardHeaders: true,
     legacyHeaders: false,
+});
+
+/**
+ * Rate limiter for verify endpoint
+ * 100 requests per 15 minutes
+ */
+export const verifyLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100,
+    message: { error: 'Too many verification attempts, please try again later' }
 }); 

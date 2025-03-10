@@ -1,12 +1,13 @@
 import { Pool } from 'pg';
 import { Service } from '../interfaces/Service';
-import { pools } from '../config/database';
+import { pool } from '../config/database';
+import { verifyApiKey } from '../utils/apiKey';
 
 export class ServiceRepository {
     private readonly db: Pool;
 
     constructor() {
-        this.db = pools.auth;
+        this.db = pool;
     }
 
     async findById(id: string): Promise<Service | null> {
@@ -33,16 +34,25 @@ export class ServiceRepository {
         return result.rows[0] || null;
     }
 
-    async validateApiKey(serviceName: string, apiKey: string): Promise<Service | null> {
+    async validateApiKey(serviceName: string, plainApiKey: string): Promise<Service | null> {
+        // First get the service by name
         const result = await this.db.query(
             `SELECT s.*, ARRAY_AGG(sp.allowed_service_id) as allowed_services
              FROM services s
              LEFT JOIN service_permissions sp ON sp.service_id = s.id
-             WHERE s.name = $1 AND s.api_key_hash = $2 AND s.is_active = true
+             WHERE s.name = $1 AND s.is_active = true
              GROUP BY s.id`,
-            [serviceName, apiKey] // Note: API key should be hashed before comparison
+            [serviceName]
         );
-        return result.rows[0] || null;
+
+        const service = result.rows[0];
+        if (!service) return null;
+
+        // Verify the plain API key against the stored hash
+        const isValid = await verifyApiKey(plainApiKey, service.api_key_hash);
+        if (!isValid) return null;
+
+        return service;
     }
 
     async canAccessService(sourceServiceId: string, targetServiceName: string): Promise<boolean> {
@@ -150,5 +160,13 @@ export class ServiceRepository {
         const service = await this.findById(id);
         if (!service) throw new Error('Service not found after update');
         return service;
+    }
+
+    async verifyApiKey(serviceName: string, apiKey: string) {
+        const result = await pool.query(
+            'SELECT * FROM services WHERE name = $1 AND api_key = $2',
+            [serviceName, apiKey]
+        );
+        return result.rows[0];
     }
 } 
