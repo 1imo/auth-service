@@ -1,19 +1,15 @@
-import { Router, Response, NextFunction, RequestHandler } from 'express';
+import { Router } from 'express';
+import { UserRepository } from '../repositories/UserRepository';
 import { ServiceRepository } from '../repositories/ServiceRepository';
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import { serviceAuth } from '../middleware/serviceAuth';
+import { createHandler } from '../utils/routeHandler';
 import { verifyLimiter } from '../middleware/rateLimiter';
-import { AuthenticatedRequest } from '../middleware/serviceAuth';
 
 const router = Router();
+const userRepository = new UserRepository();
 const serviceRepository = new ServiceRepository();
-
-// Create a handler factory to reduce boilerplate
-const createHandler = (
-    handler: (req: AuthenticatedRequest, res: Response) => Promise<void>
-): RequestHandler => {
-    return (req, res, next) => {
-        handler(req as AuthenticatedRequest, res).catch(next);
-    };
-};
 
 /**
  * Verify service credentials and permissions
@@ -22,18 +18,6 @@ const createHandler = (
 router.post('/verify',
     verifyLimiter,
     createHandler(async (req, res) => {
-        // Log the full request details
-        console.log('Auth Verification Request:', {
-            headers: {
-                apiKey: req.get('X-API-Key'),
-                serviceName: req.get('X-Service-Name'),
-                targetService: req.get('X-Target-Service')
-            },
-            body: req.body,
-            method: req.method,
-            path: req.path
-        });
-
         const apiKey = req.get('X-API-Key');
         const serviceName = req.get('X-Service-Name');
         const targetService = req.get('X-Target-Service');
@@ -77,6 +61,59 @@ router.post('/verify',
             id: service.id,
             name: service.name,
             allowedServices: service.allowedServices
+        });
+    })
+);
+
+/**
+ * Authenticate user credentials
+ * @route POST /api/auth/signin
+ */
+router.post('/signin',
+    verifyLimiter,
+    serviceAuth(serviceRepository),
+    createHandler(async (req, res) => {
+        const { email, password } = req.body;
+
+        if (!email || !password) {
+            res.status(400).json({ error: 'Email and password are required' });
+            return;
+        }
+
+        const user = await userRepository.findByEmail(email);
+
+        if (!user) {
+            res.status(401).json({ error: 'Invalid credentials' });
+            return;
+        }
+
+        const isValid = await bcrypt.compare(password, user.password_hash);
+
+
+        if (!isValid) {
+            res.status(401).json({ error: 'Invalid credentials' });
+            return;
+        }
+
+        const token = jwt.sign(
+            {
+                userId: user.id,
+                email: user.email,
+                role: user.role
+            },
+            process.env.JWT_SECRET as string,
+            { expiresIn: '7d' }
+        );
+
+        res.json({
+            token,
+            user: {
+                id: user.id,
+                email: user.email,
+                firstName: user.first_name,
+                lastName: user.last_name,
+                role: user.role
+            }
         });
     })
 );

@@ -14,6 +14,8 @@ export const serviceAuth = (serviceRepository: ServiceRepository) => {
         const apiKey = req.get('X-API-Key');
         const serviceName = req.get('X-Service-Name');
 
+        console.log("hit")
+
         if (!apiKey || !serviceName) {
             res.status(401).json({ error: 'Missing authentication credentials' });
             return;
@@ -29,7 +31,9 @@ export const serviceAuth = (serviceRepository: ServiceRepository) => {
 
             // If accessing another service, check permissions
             const targetService = req.get('X-Target-Service');
+            console.log("Target Service: ", targetService)
             if (targetService) {
+                console.log("Service ID: ", service.id, "Target: ", targetService)
                 const hasAccess = await serviceRepository.canAccessService(service.id, targetService);
                 if (!hasAccess) {
                     res.status(403).json({ error: 'Service does not have permission to access target service' });
