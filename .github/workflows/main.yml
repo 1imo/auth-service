@@ -23,5 +23,5 @@ jobs:
           git fetch
           git pull
           npm install
-          npx pm2 restart 3
+          npx pm2 restart 6
         EOF
