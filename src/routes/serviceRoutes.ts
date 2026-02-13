@@ -60,7 +60,7 @@ router.put('/:id/permissions',
     adminOperationLimiter,
     serviceAuth(serviceRepository),
     createHandler(async (req, res) => {
-        const { id } = req.params;
+        const id = String(req.params.id);
         const { allowedServices } = req.body;
 
         // Check if requester is admin
@@ -82,7 +82,7 @@ router.post('/:id/rotate-key',
     keyRotationLimiter,
     serviceAuth(serviceRepository),
     createHandler(async (req, res) => {
-        const { id } = req.params;
+        const id = String(req.params.id);
 
         // Check if requester is admin
         if (req.service?.name !== 'admin-service') {
